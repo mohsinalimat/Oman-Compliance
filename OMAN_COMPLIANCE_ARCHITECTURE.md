@@ -328,3 +328,33 @@ coverage of the July 2026 spec publication and June–July 2026 ASP accreditatio
 any of this, locate and read the actual PINT OM 1.0.1 packages on the Peppol documentation portal and OTA's
 own Fawtara technical guidance, since secondary sources already disagree with our findings doc on at least
 one point (QR code mandatoriness).
+
+6. **First concrete ASP with public API docs found — Marmin.** As of 2026-09-16,
+   [docs.om.marmin.ai](https://docs.om.marmin.ai/docs/2026-01-01) (spec version `2026-01-01`) publishes a full
+   developer reference for its "OMN E-Invoicing API," giving us a real (if single-vendor) example of the
+   per-ASP scheme item 2 anticipated:
+   - **Auth is HMAC-SHA256 + short-lived JWT**, not a bare API key or OAuth: the client computes a Base64
+     HMAC-SHA256 signature (Client ID as message, Client Secret as key) on its own backend, sends it via an
+     `x-marmin-signature` header to `GET /auth/token`, and gets back a short-lived JWT used as a Bearer token
+     for subsequent calls. This is one concrete instance to model `auth_strategy` (§1.5) against — worth
+     treating as *a* pattern to support, not *the* pattern, until a second ASP's docs are checked.
+   - **QR code and Seller UUID are mandatory and auto-generated**, contradicting the secondary source cited in
+     item 5 that claimed QR code was dropped from the mandatory field list. Marmin auto-generates both on every
+     invoice-family document; the QR payload is TLV-encoded (version, invoice type/number, seller name, VATIN,
+     issue date/time, tax-inclusive total, VAT amount, Seller UUID), Base64-encoded, then rendered as the QR
+     image. Seller UUID (field BTOM-004) is distinct from the Peppol network UUID — deterministically derived
+     (UUID v5) from invoice fields unless the org supplies its own. This doesn't settle the PINT-OM spec
+     question outright (Marmin could be over-including fields relative to the bare mandatory set), but it's
+     evidence toward "QR code is still expected in practice," not against it.
+   - **Transmission has two independently-tracked legs**, confirming and sharpening the five-corner-model
+     framing in item 2: a **C3 leg** (commercial UBL document delivery over the Peppol network) and a **C5 leg**
+     (OTA tax-authority submission/validation). Marmin exposes both via `meta_info.peppol_status` on document
+     responses and via `GET /api/{document-type}/{id}/peppol-status` / `.../peppol-status-logs`, with
+     `participant_status`, `ota_status`, and an aggregated `overall_status`. This is a useful shape for our own
+     `e-Invoice Log` status modeling (§1.5) — one field per leg, not a single flat status.
+   - Document types match the UN/CEFACT-style codes we'd expect: Sales Invoice (380), Credit Note (381), Debit
+     Note (383), Purchase Invoice (389), Purchase Credit Note (261); documents are retrievable as JSON, PDF, or
+     UBL 2.1 XML.
+   - Still a single ASP's implementation, not OTA's own spec — treat as corroborating evidence and a design
+     reference for the pluggable auth/status architecture, not as a substitute for reading the actual PINT OM
+     1.0.1 packages and OTA guidance called for above.
