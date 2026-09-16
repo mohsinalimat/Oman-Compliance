@@ -26,6 +26,39 @@ bench install-app oman_compliance
 Then configure the app for each Oman company — see "Suggested setup order for a new company" in
 `OMAN_COMPLIANCE_CONFIGURATION.md`.
 
+### Configuration checklist: generating a VAT Return
+
+A **Oman VAT Return** can only be generated correctly once, for the company in question, all of the
+following are in place. `OMAN_COMPLIANCE_CONFIGURATION.md` covers the reasoning behind each in full; this is
+the minimum checklist:
+
+1. **Company TRN** — set the Company's **TRN** field (Desk → Company).
+2. **Oman VAT Settings → VAT Accounts** — add a row for the company naming its **Output VAT Account**
+   (required) and **Input VAT Account** (required only if the company uses Reverse Charge). Without this row,
+   VAT Category validation and Reverse Charge can't identify which ledger rows are actually VAT.
+3. **VAT Category on Item Tax Templates** — set each Oman tax template's own **VAT Category** (Standard
+   Rated/Zero Rated/Exempt/Out of Scope) so transactions using it default and validate correctly, rather than
+   relying only on the zone-based fallback.
+4. **Designated Zone tagging** — link any **Address** inside Duqm (SEZAD), Salalah, Sohar, or Al Mazunah to
+   its **Designated Zone**, so Zero Rated auto-defaults on transactions delivered there.
+5. **Reverse Charge Applicable** (Purchase Invoice, box 2) — for imported services, check this and use a
+   Purchase Taxes and Charges template that posts both a self-accounted output VAT row (to the Output VAT
+   Account) and an offsetting input VAT row (to the Input VAT Account).
+6. **Dispatch Address** (Purchase Invoice, box 4 — imports of goods) — set on cross-border purchases so
+   **Import of Goods** is detected automatically from its country vs. the Company's own.
+7. **Shipping/Customer Address** (Sales Invoice, box 3(a) exports vs. box 1(b) domestic zero-rated) — set to
+   the actual delivery country so **Export** is detected automatically.
+8. **Supplier Address** (Purchase Invoice, box 2(a)/2(b) GCC vs. non-GCC reverse charge) — set so **GCC
+   Supplier** is detected automatically from its country.
+
+Once a company is configured, generate a return from Desk → **Oman VAT Return** → New: set **Company**,
+**From Date**, **To Date**, then click **Generate Return** to recompute every box from that period's
+transactions. A return can be regenerated freely while **Status** is Draft (e.g. after correcting an
+invoice); setting it to Filed locks it permanently.
+
+If a site has historical data from `oman_vat`, also run the one-time backfill described in "Migrating from
+`oman_vat`" below before generating a return that covers pre-migration periods.
+
 ### Migrating from `oman_vat`
 
 If a site already runs the older `oman_vat` app, this app can coexist with it — there's no requirement to
@@ -50,8 +83,32 @@ uninstall `oman_vat` first or ever.
   ```
 
   Pass `company="..."` to scope it to one company. This backfills `vat_category` on Sales Order/Quotation/
-  Delivery Note/Sales Invoice/Purchase Invoice item rows still missing it — needed before Phase 3's VAT Return
+  Delivery Note/Sales Invoice/Purchase Invoice item rows still missing it — needed before the VAT Return
   section functions will correctly categorize a historical period's totals.
+
+#### Recommendation: remove `oman_vat` once migration is verified
+
+Coexistence is meant as a safety net for a live cutover, not a permanent state. `oman_vat` was audited and
+found to implement only a decorative QR code and a two-section sales/purchase ledger — no real 7-box VAT
+return, no reverse charge, no designated-zone handling, no e-invoicing path, and an active bug that reports
+document-currency amounts as if they were OMR (see `OMAN_VAT_COMPLIANCE_FINDINGS.md`). Leaving it installed
+after cutover risks someone running its inaccurate report, or editing its settings, by mistake.
+
+Once you've:
+
+1. Installed `oman_compliance` and run `bench migrate` (auto-migrates Oman VAT Settings and TRNs),
+2. Confirmed each company's **Oman VAT Settings** and **Company TRN** migrated correctly — check the Error
+   Log for anything flagged for manual review, and fix those by hand,
+3. Run the one-time `migrate_legacy_item_vat_flags` backfill above against real historical data, and
+4. Generated at least one **Oman VAT Return** in `oman_compliance` and spot-checked its totals against
+   `oman_vat`'s old report for the same period,
+
+remove `oman_vat` from the site:
+
+```bash
+bench --site $SITE uninstall-app oman_vat
+bench remove-app oman_vat   # optional: also drop it from the bench entirely
+```
 
 ### Contributing
 
