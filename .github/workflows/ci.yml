@@ -4,11 +4,11 @@ name: CI
 on:
   push:
     branches:
-      - develop
+      - main
   pull_request:
 
 concurrency:
-  group: develop-oman_compliance-${{ github.event.number }}
+  group: main-oman_compliance-${{ github.event.number }}
   cancel-in-progress: true
 
 jobs:
@@ -90,8 +90,18 @@ jobs:
         working-directory: /home/runner/frappe-bench
         run: |
           bench get-app oman_compliance $GITHUB_WORKSPACE --resolve-deps
+          # Legacy oman_vat, needed so the Phase 6 migration tests (utils/test_migration.py,
+          # patches/test_patches.py) can create real legacy OMAN VAT Setting/Sales/Purchase Account
+          # records to migrate from. `bench get-app --branch` maps straight to `git clone --branch`,
+          # which only accepts a real branch/tag ref, not a raw commit SHA — so this clones the
+          # default branch (this repo's own `main`, still the legacy app as of this writing) and
+          # then checks out the exact commit before `main` became the oman_compliance rewrite (see
+          # OMAN_COMPLIANCE_PLAN.md's Phase 6 entry), so this step keeps working once `main` changes.
+          bench get-app oman_vat https://github.com/wahni-green/Oman-Compliance.git
+          git -C apps/oman_vat checkout 806d077677786559de7871cdf406bdf638368b2a
           bench setup requirements --dev
           bench new-site --db-root-password root --admin-password admin test_site
+          bench --site test_site install-app oman_vat
           bench --site test_site install-app oman_compliance
           bench build
         env:

@@ -271,22 +271,24 @@ spec before starting. Target: functional ahead of the ~August 2026 pilot if this
 
 Only relevant for sites that currently run `oman_vat` and need to move to this app without data loss.
 
-- [ ] Patch: migrate `OMAN VAT Setting` → `Oman VAT Settings` + `Designated Zone`/`TRN` records
-- [ ] Patch: migrate any `is_zero_rated`/`is_exempt` custom field data on Item to the new VAT-category fields
-- [ ] Decide and document: `oman_vat` uninstall path, or side-by-side coexistence period
-- [ ] Tests: `patches/test_patches.py`-style meta-test validating migration patch correctness
+- [x] Patch: migrate `OMAN VAT Setting` → `Oman VAT Settings` + `Designated Zone`/`TRN` records
+- [x] Patch: migrate any `is_zero_rated`/`is_exempt` custom field data on Item to the new VAT-category fields
+- [x] Decide and document: `oman_vat` uninstall path, or side-by-side coexistence period — **coexistence**,
+      decided by the user; see status log below
+- [x] Tests: `patches/test_patches.py`-style meta-test validating migration patch correctness
 
 ---
 
 ## Phase 7 — Hardening & release readiness
 
-- [ ] Full test coverage audit across all phases (legacy app shipped with empty stub tests, findings §63 —
-      don't repeat that)
-- [ ] CI green on `ci.yml` / `linter.yml` (already scaffolded in this repo)
-- [ ] README updated with real setup/usage instructions (beyond the current bench-install boilerplate)
-- [ ] Record-retention guidance documented (10 years general / 15 years real-estate, findings §31) — a process
-      note, not a feature, per the findings doc
-- [ ] Final pass against the OTA mandatory-field checklist for tax invoices before pilot participation
+- [x] Full test coverage audit across all phases (legacy app shipped with empty stub tests, findings §63 —
+      don't repeat that) — see status log; no material gaps found, so no padding tests were added
+- [x] CI green on `ci.yml` / `linter.yml` (already scaffolded in this repo)
+- [x] README updated with real setup/usage instructions (beyond the current bench-install boilerplate)
+- [x] Record-retention guidance documented (10 years general / 15 years real-estate, findings §31) — a process
+      note, not a feature, per the findings doc — added to `OMAN_COMPLIANCE_CONFIGURATION.md`
+- [x] Final pass against the OTA mandatory-field checklist for tax invoices before pilot participation — see
+      status log: only a *partial* pass was actually possible today
 
 ---
 
@@ -758,3 +760,77 @@ Only relevant for sites that currently run `oman_vat` and need to move to this a
   - `bench migrate` (1 new custom field via the bumped patch marker `#9`, 2 new standard Print
     Format records synced from disk, idempotent) and `bench run-tests --app oman_compliance`
     confirmed all passing. `ruff check`/`ruff format` clean on every new/changed Python file.
+- 2026-09-16 — Phase 6 complete: migration from legacy `oman_vat`, on the user's explicit direction to hold
+  Phase 5 (still blocked on primary OTA/Peppol spec docs, per §3 above) and finish Phase 6/7 instead. Two
+  decisions the user made explicitly up front: **coexistence, not uninstall** (`oman_vat` may stay installed
+  indefinitely; nothing here assumes or performs an uninstall), and **auto-derive settings only when
+  unambiguous** (never guess an Output/Input VAT Account from ambiguous legacy data).
+  - New `oman_compliance/oman_compliance/utils/migration.py`: `migrate_oman_vat_settings()` (idempotent,
+    wired into `patches.txt`) collapses each legacy `OMAN VAT Setting`'s per-item-tax-template sales/purchase
+    account rows onto this app's single Output/Input VAT Account per company only when every row on a side
+    names the same account; ambiguous companies, and companies whose legacy setting isn't actually for an
+    Oman company, are reported under a `needs_review` list instead of guessed. Same function also migrates
+    Company TRN from the legacy `tax_id` field into `oman_trn`, skipping (not throwing on) any legacy value
+    that fails this app's stricter TRN format validation. `migrate_legacy_item_vat_flags()` — modeled directly
+    on Phase 3's `backfill_classification_flags()` and, like it, deliberately **not** wired into `patches.txt`
+    — backfills `vat_category` on the five item child doctypes this app actually models it on, from legacy
+    `is_zero_rated`/`is_exempt`, via one query-builder bulk `UPDATE` per doctype (not per-row Python) since
+    this can touch every historical item row on a site.
+  - `patches/v1/migrate_oman_vat_settings.py` wraps the settings/TRN migration for `patches.txt`, reporting
+    anything needing manual review via `print()` (not `frappe.msgprint()`, which targets a web request's
+    client-side message log and never reaches `bench migrate`'s terminal) plus `frappe.log_error` for a
+    persisted record.
+  - **Tests**: `utils/test_migration.py` (15 tests) and `patches/test_patches.py` (2 tests), all passing.
+    Getting real DB-backed coverage (this app's established preference over mocking, per Phase 3's own status
+    log) without installing the actual `oman_vat` app on the shared `dev.localhost` bench turned out to need
+    care: `bench install-app oman_vat` would immediately run its fixture sync
+    (`oman_vat/fixtures/custom_field.json`) and overwrite two Custom Fields this app already owns
+    (`Company-company_name_in_arabic`, `Address-address_in_arabic`) with legacy's versions. Used
+    `frappe.reload_doc("oman_vat", "doctype", ..., force=True)` instead, three times, to create just the three
+    legacy doctypes' real tables directly from `apps/oman_vat`'s DocType JSON without registering the app or
+    running any of its fixtures/hooks, plus a scoped, temporary `is_zero_rated`/`is_exempt` Custom Field pair
+    on the five relevant child doctypes (not oman_vat's own broader field set) for the item-flag tests. Both
+    were fully torn down afterward (tables dropped, columns dropped, scratch module deleted) — confirmed via
+    `SHOW TABLES`/`SHOW COLUMNS` that `dev.localhost` is back to its pre-session schema. CI (`ci.yml`, below)
+    instead does a real `bench install-app oman_vat`, in the correct order (oman_vat installed first, so
+    oman_compliance's own `create_custom_fields()` — which runs `update=True` — lands last and fixes up the
+    two shared field definitions), pinned to the exact legacy commit
+    (`806d077677786559de7871cdf406bdf638368b2a`) rather than `--branch main`, since this repo's own `main` will
+    eventually *become* the oman_compliance rewrite once this work merges (`apps/oman_vat`'s own git remote
+    confirms it's the same GitHub repo, checked out from `main` before that happens).
+  - Also found and fixed one unrelated, pre-existing environmental issue while verifying: a mandatory
+    `division` Link custom field (module-less, added 2026-09-08, likely from another team's work on this
+    shared bench) on Sales/Sales Order/Quotation/Delivery Note Item was silently breaking this app's own
+    `create_submitted_sales_invoice()` test helper — meaning Phase 3's existing `test_backfill.py` was already
+    failing on this bench before this session touched anything. Temporarily set `reqd=0` on those four fields
+    (user-approved), ran the full verification pass, restored `reqd=1` immediately after. Not fixed at the
+    source — it's another team's field, not this app's — just flagged here so it isn't mistaken for a
+    regression later.
+  - `bench migrate` confirmed the new patch line resolves and runs cleanly end-to-end (real bug caught here:
+    the first `patches.txt` entry used the wrong import path, `oman_compliance.oman_compliance.patches...`
+    instead of `oman_compliance.patches...` — fixed before landing).
+- 2026-09-16 — Phase 7 complete: hardening & release readiness, with two items landing smaller than originally
+  scoped once actually investigated:
+  - **Test coverage audit**: read through every `utils/`/`overrides/`/`doctype/` module against its existing
+    `test_*.py` — coverage is already close to 1:1 (≈26 files before this phase). No material untested branch
+    turned up worth adding a test for; nothing was padded on for its own sake.
+  - **CI green**: `.github/workflows/ci.yml` was still bench's scaffold default — triggered on a `develop`
+    branch this repo has never used (it uses `main` + phase branches). Repointed to `main`, added the
+    `oman_vat` install step needed for Phase 6's migration tests (see above). `linter.yml` didn't reference a
+    branch at all and needed no change.
+  - **README**: replaced the generic bench-app boilerplate with real setup guidance and a "Migrating from
+    oman_vat" section describing the coexistence patch and `migrate_legacy_item_vat_flags`.
+  - **Record retention**: added to `OMAN_COMPLIANCE_CONFIGURATION.md` as a documentation-only note (10 years
+    general / 15 years real estate, findings §31) — explicitly a business process, not something this app
+    enforces, matching findings §62's own characterization.
+  - **OTA mandatory tax-invoice field checklist — only a partial pass was actually possible.** The plan for
+    this phase assumed findings §53's "46+ mandatory fields" was a separately-documented, concrete checklist
+    distinct from Phase 5's still-disputed PINT-OM field count. On inspection it isn't: findings §53 only names
+    general categories (Tax Invoice wording, supplier/customer name+address+TRN, bilingual content), not an
+    itemized list, and the actual field-by-field count is the same unverified-against-primary-sources figure
+    already flagged as open in §3 above. What *is* concretely checkable was checked: both Phase 4 print
+    formats already render the Tax Invoice/Simplified Tax Invoice heading, supplier and customer name/address/
+    TRN (bilingual, via `company_name_in_arabic`/`customer_name_in_arabic`), with explicit
+    `missing-mandatory-field` warnings when an address is absent — i.e. everything findings §53 concretely
+    names is already there. A genuine field-by-field pass against OTA's real mandatory-field list remains
+    blocked on the same primary-source gap as Phase 5, not something to fake here.

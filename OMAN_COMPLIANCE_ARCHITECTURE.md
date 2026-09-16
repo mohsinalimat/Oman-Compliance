@@ -291,19 +291,40 @@ other conventions instead:
 
 ## 3. Open questions to resolve before implementation
 
-These need the actual OTA/Fawtara technical specification (not yet published in full, or not yet reviewed
-here) before the e-invoicing client can be built with confidence:
+These need the actual OTA/Fawtara technical specification before the e-invoicing client can be built with
+confidence. Status as of 2026-08-26 (public secondary sources only — no primary OTA developer/API docs
+reviewed yet; **we are not participating in the August 2026 pilot**, so none of this is being acted on now,
+just tracked for whenever Phase 5 is picked up):
 
-1. **TRN format** — exact length and whether OTA publishes a checksum algorithm (GSTIN has a documented
-   mod-36 check digit; Oman's equivalent is unconfirmed).
-2. **Fawtara authentication protocol** — bearer token / API key / mTLS / OAuth2, and whether an encrypted-
-   session model (like NIC's) is required, or a simpler stateless auth suffices.
-3. **Service Provider selection** — is there one, or many accredited providers (analogous to India's multiple
-   GSPs)? Affects whether `api_classes/` needs a factory/selection layer like `EInvoiceAPI.create()`.
-4. **Idempotency/duplicate-submission behavior** — does resubmitting an already-accepted invoice return the
-   original result (like NIC's duplicate-IRN handling) or a hard error?
-5. **PINT-OM schema specifics** — exact UBL 2.1 field mapping from ERPNext's Sales Invoice, needed to build
-   `utils/transaction_data.py`-equivalent payload construction.
+1. **TRN format** — still unconfirmed. No public source found documenting a checksum/check-digit algorithm.
+2. **Fawtara authentication protocol** — **partially resolved, and the original framing was wrong.** There is
+   no single OTA-wide auth protocol to reverse-engineer: Oman uses a Peppol **five-corner model**, so ERPNext
+   never talks to OTA directly. It talks to whichever Accredited Service Provider (ASP) the taxpayer has
+   selected, and each ASP exposes its own API/auth scheme. This confirms the architecture doc's existing
+   pluggable `auth_strategy` design (§1.5) was the right call — the strategy class will end up being
+   per-provider, not a single Fawtara-wide implementation. Still open: which ASP(s) we'd actually integrate
+   against, and that ASP's specific auth mechanism.
+3. **Service Provider selection — resolved: many providers, one taxpayer-to-provider binding.** OTA began
+   ASP accreditation after the Fawtara Release 2 go-live (2026-06-28); ~12 providers were accredited by July
+   2026. Taxpayers select one ASP via the Fawtara Portal, and — per the current SMP API — a taxpayer can be
+   linked to only a **single** service provider at a time (enforced, not just a convention), with individual
+   (non-bulk) onboarding per taxpayer. This confirms `api_classes/` needs the factory/selection-style layer
+   India Compliance uses for its multiple GSPs, and that provider choice is a per-`Fawtara Credential`-row
+   concern, not a global one.
+4. **Idempotency/duplicate-submission behavior** — still unconfirmed; no public source addresses this.
+5. **PINT-OM schema specifics — spec is now published, not yet reviewed in detail.** OTA became an official
+   Peppol Authority (January 2026) and published **PINT OM 1.0.1** on 2026-07-29 via the Peppol documentation
+   portal, as three packages: PINT BIS Billing Oman, PINT BIS Self-Billing Oman, and the Oman Tax Data
+   Document (TDD) — all UBL 2.1 XML, validated via XSD + Schematron + code-list checks, with PDF/A-3
+   (embedded XML) as the alternative accepted format. One secondary source states the current mandatory-field
+   count is 73 (up from an earlier draft's 53) and that **QR code, digital signature, and invoice hash were
+   removed from the mandatory list** in this version — this directly contradicts findings §41's "QR code is
+   mandatory" and needs verifying against the actual spec (not just the secondary summary) before touching
+   the plan's QR-code checkbox. `utils/transaction_data.py`-equivalent field mapping still needs to be built
+   from the real spec document, not a summary.
 
-These should be confirmed against OTA's published Fawtara integration guide once available, ideally before the
-pilot window opens (~late August 2026).
+None of the above comes from OTA's own developer/API documentation — only from tax-advisory/vendor blog
+coverage of the July 2026 spec publication and June–July 2026 ASP accreditation. Before writing code against
+any of this, locate and read the actual PINT OM 1.0.1 packages on the Peppol documentation portal and OTA's
+own Fawtara technical guidance, since secondary sources already disagree with our findings doc on at least
+one point (QR code mandatoriness).
