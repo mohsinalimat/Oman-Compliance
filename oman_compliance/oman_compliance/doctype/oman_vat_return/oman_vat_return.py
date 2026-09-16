@@ -132,6 +132,21 @@ class OmanVATReturn(Document):
 
 		self.save()
 
+	@frappe.whitelist()
+	def mark_as_filed(self):
+		"""The only supported Draft -> Filed transition (see validate_filed_is_immutable() above,
+		which locks the document the moment this save lands). Requires boxes to already be
+		generated — filing a return that was never run through generate_return() would lock in an
+		all-zero return rather than the period's actual figures."""
+		if self.status == "Filed":
+			frappe.throw(_("This return has already been filed."))
+
+		if not self.boxes:
+			frappe.throw(_("Generate the return before filing it."))
+
+		self.status = "Filed"
+		self.save()
+
 
 def _build_box_rows(domestic_supplies, exports, reverse_charge_purchases, imports_of_goods, input_vat_credit):
 	"""Yields (box_code, description, box) tuples in official return order. 1(d)/1(e)/1(f) are

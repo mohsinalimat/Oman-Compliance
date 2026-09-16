@@ -137,11 +137,28 @@ class TestOmanVATReturn(FrappeTestCase):
 
 	def test_regenerating_a_filed_return_is_rejected(self):
 		self._generate_with()
-		self.doc.status = "Filed"
-		self.doc.save()
+		self.doc.mark_as_filed()
 
 		with self.assertRaises(frappe.ValidationError):
 			self.doc.generate_return()
+
+	def test_mark_as_filed_sets_status(self):
+		self._generate_with()
+		self.doc.mark_as_filed()
+
+		self.assertEqual(self.doc.status, "Filed")
+		self.assertEqual(frappe.db.get_value(self.doc.doctype, self.doc.name, "status"), "Filed")
+
+	def test_mark_as_filed_without_generating_is_rejected(self):
+		with self.assertRaises(frappe.ValidationError):
+			self.doc.mark_as_filed()
+
+	def test_mark_as_filed_twice_is_rejected(self):
+		self._generate_with()
+		self.doc.mark_as_filed()
+
+		with self.assertRaises(frappe.ValidationError):
+			self.doc.mark_as_filed()
 
 	def test_from_date_after_to_date_is_rejected(self):
 		self.doc.from_date = get_unique_test_date()
@@ -195,8 +212,7 @@ class TestOmanVATReturn(FrappeTestCase):
 
 	def test_editing_a_filed_return_is_rejected(self):
 		self._generate_with()
-		self.doc.status = "Filed"
-		self.doc.save()
+		self.doc.mark_as_filed()
 
 		self.doc.period_type = "Quarterly"
 		with self.assertRaises(frappe.ValidationError):
@@ -204,8 +220,7 @@ class TestOmanVATReturn(FrappeTestCase):
 
 	def test_reverting_a_filed_return_to_draft_is_rejected(self):
 		self._generate_with()
-		self.doc.status = "Filed"
-		self.doc.save()
+		self.doc.mark_as_filed()
 
 		self.doc.status = "Draft"
 		with self.assertRaises(frappe.ValidationError):
@@ -213,8 +228,7 @@ class TestOmanVATReturn(FrappeTestCase):
 
 	def test_deleting_a_filed_return_is_rejected(self):
 		self._generate_with()
-		self.doc.status = "Filed"
-		self.doc.save()
+		self.doc.mark_as_filed()
 
 		with self.assertRaises(frappe.ValidationError):
 			self.doc.delete()
@@ -232,8 +246,7 @@ class TestOmanVATReturn(FrappeTestCase):
 		stale_doc = frappe.get_doc("Oman VAT Return", self.doc.name)
 		self.assertEqual(stale_doc.status, "Draft")
 
-		self.doc.status = "Filed"
-		self.doc.save()
+		self.doc.mark_as_filed()
 
 		with self.assertRaises(frappe.ValidationError):
 			stale_doc.delete()
