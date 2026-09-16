@@ -23,20 +23,21 @@ from oman_compliance.tests import (
 # Company/Account creation, etc.), since frappe internals elsewhere legitimately depend on the real
 # installed-apps list (e.g. hook resolution) and must see it unpatched.
 _INSTALLED_APPS_WITH_LEGACY = ["frappe", "erpnext", "oman_compliance", "oman_vat"]
+_INSTALLED_APPS_WITHOUT_LEGACY = ["frappe", "erpnext", "oman_compliance"]
 
 
-def _migrate_settings():
+def _migrate_settings(installed_apps=_INSTALLED_APPS_WITH_LEGACY):
 	with patch(
 		"oman_compliance.oman_compliance.utils.migration.frappe.get_installed_apps",
-		return_value=_INSTALLED_APPS_WITH_LEGACY,
+		return_value=installed_apps,
 	):
 		return migrate_oman_vat_settings()
 
 
-def _migrate_item_flags(**kwargs):
+def _migrate_item_flags(installed_apps=_INSTALLED_APPS_WITH_LEGACY, **kwargs):
 	with patch(
 		"oman_compliance.oman_compliance.utils.migration.frappe.get_installed_apps",
-		return_value=_INSTALLED_APPS_WITH_LEGACY,
+		return_value=installed_apps,
 	):
 		return migrate_legacy_item_vat_flags(**kwargs)
 
@@ -114,7 +115,7 @@ class TestMigrateOmanVatSettings(FrappeTestCase):
 			[{"company": self.company, "reason": "ambiguous_or_missing_output_vat_account"}],
 		)
 
-	def test_ambiguous_purchase_account_leaves_input_account_blank(self):
+	def test_ambiguous_purchase_account_leaves_input_account_blank_and_flags_for_review(self):
 		other_account, _ = get_oman_test_vat_accounts(get_non_oman_test_company())
 		_create_legacy_setting(self.company, [self.output_account], [self.input_account, other_account])
 
@@ -125,6 +126,24 @@ class TestMigrateOmanVatSettings(FrappeTestCase):
 		self.assertEqual(row.output_vat_account, self.output_account)
 		self.assertFalse(row.input_vat_account)
 		self.assertEqual(result["accounts_migrated"], 1)
+		self.assertIn(
+			{"company": self.company, "reason": "ambiguous_or_missing_input_vat_account"},
+			result["needs_review"],
+		)
+
+	def test_missing_purchase_accounts_flags_for_review(self):
+		_create_legacy_setting(self.company, [self.output_account], [])
+
+		result = _migrate_settings()
+
+		settings = frappe.get_single("Oman VAT Settings")
+		row = next(r for r in settings.vat_accounts if r.company == self.company)
+		self.assertFalse(row.input_vat_account)
+		self.assertEqual(result["accounts_migrated"], 1)
+		self.assertIn(
+			{"company": self.company, "reason": "ambiguous_or_missing_input_vat_account"},
+			result["needs_review"],
+		)
 
 	def test_never_overwrites_an_already_configured_company(self):
 		set_vat_accounts(self.company, output_account=self.output_account)
@@ -184,9 +203,12 @@ class TestMigrateOmanVatSettings(FrappeTestCase):
 		self.assertEqual(sum(1 for r in settings.vat_accounts if r.company == self.company), 1)
 
 	def test_noop_when_legacy_app_not_installed(self):
+		# Mocked explicitly rather than relying on this bench's ambient installed-apps state: CI
+		# genuinely installs oman_vat (to exercise the rest of this test class for real), so this
+		# is the only way to deterministically exercise the "not installed" branch there too.
 		_create_legacy_setting(self.company, [self.output_account], [self.input_account])
 
-		result = migrate_oman_vat_settings()
+		result = _migrate_settings(installed_apps=_INSTALLED_APPS_WITHOUT_LEGACY)
 
 		self.assertEqual(result, {"accounts_migrated": 0, "trns_migrated": 0, "needs_review": []})
 
@@ -202,9 +224,12 @@ class TestMigrateLegacyItemVatFlags(FrappeTestCase):
 		# first so each test method only ever sees the row(s) it creates for itself.
 		_migrate_item_flags(company=self.company)
 
-	def _legacy_row(self, is_zero_rated=0, is_exempt=0, vat_category=""):
+	def _legacy_row(self, is_zero_rated=0, is_exempt=0, vat_category="", company=None):
 		invoice = create_submitted_sales_invoice(
-			self.company, vat_category="Standard Rated", net_amount=100, posting_date=self.test_date
+			company or self.company,
+			vat_category="Standard Rated",
+			net_amount=100,
+			posting_date=self.test_date,
 		)
 		row = invoice.items[0]
 		frappe.db.set_value(
@@ -254,6 +279,20 @@ class TestMigrateLegacyItemVatFlags(FrappeTestCase):
 		self.assertEqual(result["Sales Invoice Item"], 0)
 		self.assertEqual(frappe.db.get_value("Sales Invoice Item", row_name, "vat_category"), "")
 
+	def test_sitewide_run_still_excludes_non_oman_companies(self):
+		other_company = get_non_oman_test_company()
+		oman_row = self._legacy_row(is_zero_rated=1)
+		other_row = self._legacy_row(is_zero_rated=1, company=other_company)
+
+		# No `company` argument at all — a real "run once for every Oman company" invocation, not
+		# scoped to one company. Must still never touch a non-Oman company's data, the same way
+		# every other transaction-level behavior in this app is gated on utils/company.py::
+		# is_oman_company(), even though nothing here filters to `self.company` specifically.
+		_migrate_item_flags()
+
+		self.assertEqual(frappe.db.get_value("Sales Invoice Item", oman_row, "vat_category"), "Zero Rated")
+		self.assertEqual(frappe.db.get_value("Sales Invoice Item", other_row, "vat_category"), "")
+
 	def test_is_idempotent(self):
 		self._legacy_row(is_zero_rated=1)
 
@@ -263,8 +302,10 @@ class TestMigrateLegacyItemVatFlags(FrappeTestCase):
 		self.assertEqual(second_run["Sales Invoice Item"], 0)
 
 	def test_noop_when_legacy_app_not_installed(self):
+		# Mocked explicitly rather than relying on this bench's ambient installed-apps state — see
+		# the same note on TestMigrateOmanVatSettings.test_noop_when_legacy_app_not_installed.
 		self._legacy_row(is_zero_rated=1)
 
-		result = migrate_legacy_item_vat_flags(company=self.company)
+		result = _migrate_item_flags(installed_apps=_INSTALLED_APPS_WITHOUT_LEGACY, company=self.company)
 
 		self.assertEqual(result["Sales Invoice Item"], 0)

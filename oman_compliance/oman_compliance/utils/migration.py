@@ -90,6 +90,13 @@ def migrate_oman_vat_settings() -> dict:
 		row = {"company": legacy.company, "output_vat_account": next(iter(sales_accounts))}
 		if len(purchase_accounts) == 1:
 			row["input_vat_account"] = next(iter(purchase_accounts))
+		else:
+			# Still worth migrating the (unambiguous) output side, but this company will look
+			# "already configured" — and so be silently skipped — on every future run, so an
+			# ambiguous/missing input side must be surfaced now or it never will be.
+			result["needs_review"].append(
+				{"company": legacy.company, "reason": "ambiguous_or_missing_input_vat_account"}
+			)
 
 		settings.append("vat_accounts", row)
 		result["accounts_migrated"] += 1
@@ -140,12 +147,25 @@ def migrate_legacy_item_vat_flags(company: str | None = None) -> dict:
 	Restricted to System Manager, matching backfill_classification_flags(): this bypasses ordinary
 	document permissions and can touch every submitted document's item rows on the site.
 
+	Always scoped to Oman companies, `company` given or not: this app's own transaction-level
+	validation/defaulting never touches a non-Oman company's documents at all (see
+	utils/company.py::is_oman_company()), and on a shared coexistence site running this with no
+	`company` filter must not relabel every other company's historical item rows with an
+	Oman-specific VAT category just because their own `vat_category` happens to be blank too. A
+	`company` that isn't itself an Oman company is treated the same way this app treats one
+	everywhere else — left completely untouched — rather than raising, since a caller passing the
+	wrong company here is exactly the same "not this app's concern" case as e.g. a non-Oman
+	Company's Sales Invoice never getting VAT Category defaulting in the first place.
+
 	Returns a count of rows changed per child doctype."""
 	frappe.only_for("System Manager")
 
 	result = {doctype: 0 for doctype in ITEM_VAT_FLAG_DOCTYPES}
 
 	if not _legacy_app_installed():
+		return result
+
+	if company and not is_oman_company(company):
 		return result
 
 	for doctype, parent_doctype in ITEM_VAT_FLAG_DOCTYPES.items():
@@ -156,10 +176,18 @@ def migrate_legacy_item_vat_flags(company: str | None = None) -> dict:
 		item = DocType(doctype)
 		condition = (item.vat_category.isnull()) | (item.vat_category == "")
 
+		parent = DocType(parent_doctype)
+		company_doctype = DocType("Company")
+		matching_parents = (
+			frappe.qb.from_(parent)
+			.inner_join(company_doctype)
+			.on(parent.company == company_doctype.name)
+			.select(parent.name)
+			.where(company_doctype.country == "Oman")
+		)
 		if company:
-			parent = DocType(parent_doctype)
-			matching_parents = frappe.qb.from_(parent).select(parent.name).where(parent.company == company)
-			condition &= item.parent.isin(matching_parents)
+			matching_parents = matching_parents.where(parent.company == company)
+		condition &= item.parent.isin(matching_parents)
 
 		count = frappe.qb.from_(item).where(condition).select(Count("*")).run()[0][0]
 		if not count:
