@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
+from frappe.utils import get_first_day, get_last_day
 
 from oman_compliance.tests import get_oman_test_company, get_unique_test_date
 
@@ -27,9 +28,8 @@ class TestOmanVATReturn(FrappeTestCase):
 			{
 				"doctype": "Oman VAT Return",
 				"company": self.company,
-				"from_date": test_date,
-				"to_date": test_date,
-				"period_type": "Monthly",
+				"from_date": get_first_day(test_date),
+				"to_date": get_last_day(test_date),
 			}
 		).insert()
 
@@ -146,6 +146,49 @@ class TestOmanVATReturn(FrappeTestCase):
 	def test_from_date_after_to_date_is_rejected(self):
 		self.doc.from_date = get_unique_test_date()
 		self.doc.to_date = frappe.utils.add_days(self.doc.from_date, -1)
+
+		with self.assertRaises(frappe.ValidationError):
+			self.doc.save()
+
+	def test_period_type_is_derived_as_monthly_for_a_full_calendar_month(self):
+		# self.doc was already set up with a full-month range; period_type must be filled in
+		# without the caller ever having set it.
+		self.assertEqual(self.doc.period_type, "Monthly")
+
+	def test_period_type_is_derived_as_quarterly_for_a_standard_quarter(self):
+		year = get_first_day(get_unique_test_date()).year
+		self.doc.from_date = f"{year}-04-01"
+		self.doc.to_date = f"{year}-06-30"
+		self.doc.save()
+
+		self.assertEqual(self.doc.period_type, "Quarterly")
+
+	def test_user_supplied_period_type_is_overridden_by_derived_value(self):
+		self.doc.period_type = "Quarterly"
+		self.doc.save()
+
+		self.assertEqual(self.doc.period_type, "Monthly")
+
+	def test_partial_month_range_is_rejected(self):
+		test_date = get_unique_test_date()
+		self.doc.from_date = get_first_day(test_date)
+		self.doc.to_date = frappe.utils.add_days(get_first_day(test_date), 14)
+
+		with self.assertRaises(frappe.ValidationError):
+			self.doc.save()
+
+	def test_misaligned_quarter_range_is_rejected(self):
+		year = get_first_day(get_unique_test_date()).year
+		self.doc.from_date = f"{year}-02-01"
+		self.doc.to_date = f"{year}-04-30"
+
+		with self.assertRaises(frappe.ValidationError):
+			self.doc.save()
+
+	def test_multi_month_range_not_aligned_to_a_quarter_is_rejected(self):
+		test_date = get_unique_test_date()
+		self.doc.from_date = get_first_day(test_date)
+		self.doc.to_date = get_last_day(frappe.utils.add_months(test_date, 1))
 
 		with self.assertRaises(frappe.ValidationError):
 			self.doc.save()

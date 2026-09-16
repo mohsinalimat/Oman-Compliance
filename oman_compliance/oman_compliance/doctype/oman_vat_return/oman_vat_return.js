@@ -1,5 +1,9 @@
 frappe.ui.form.on("Oman VAT Return", {
-	generate_return(frm) {
-		frm.call("generate_return").then(() => frm.reload_doc());
+	refresh(frm) {
+		if (frm.doc.status === "Draft" && !frm.is_new()) {
+			frm.add_custom_button(__("Generate Return"), () => {
+				frm.call("generate_return").then(() => frm.reload_doc());
+			});
+		}
 	},
 });

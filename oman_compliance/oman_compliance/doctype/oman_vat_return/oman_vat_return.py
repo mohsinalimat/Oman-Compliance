@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from frappe.utils import get_first_day, get_last_day, getdate
 
 from oman_compliance.oman_compliance.utils.vat_return.sections.domestic_supplies import get_domestic_supplies
 from oman_compliance.oman_compliance.utils.vat_return.sections.exports import get_exports
@@ -22,13 +23,43 @@ _EMPTY_BOX = {
 	"adjustment_vat_amount": 0.0,
 }
 
+_QUARTER_START_MONTHS = (1, 4, 7, 10)
+
 
 class OmanVATReturn(Document):
 	def validate(self):
 		if self.from_date and self.to_date and self.from_date > self.to_date:
 			frappe.throw(_("From Date cannot be after To Date"))
 
+		if self.from_date and self.to_date:
+			self.period_type = self._determine_period_type()
+
 		self.validate_filed_is_immutable()
+
+	def _determine_period_type(self) -> str:
+		"""Oman VAT returns are always filed for a whole calendar period — never a partial month
+		or an off-quarter span — so `period_type` isn't user input, it's derived from From/To Date
+		and the field is read-only. A range that isn't exactly one calendar month or one standard
+		calendar quarter (Jan-Mar/Apr-Jun/Jul-Sep/Oct-Dec) is rejected outright rather than guessed
+		at."""
+		from_date = getdate(self.from_date)
+		to_date = getdate(self.to_date)
+
+		if from_date == get_first_day(from_date) and to_date == get_last_day(from_date):
+			return "Monthly"
+
+		if from_date.month in _QUARTER_START_MONTHS and from_date == get_first_day(from_date):
+			quarter_end = get_last_day(get_first_day(from_date, d_months=2))
+			if to_date == quarter_end:
+				return "Quarterly"
+
+		frappe.throw(
+			_(
+				"From Date and To Date must span exactly one calendar month, or one standard "
+				"calendar quarter (Jan-Mar, Apr-Jun, Jul-Sep, Oct-Dec)."
+			),
+			title=_("Invalid Period"),
+		)
 
 	def validate_filed_is_immutable(self):
 		"""A Filed return must not change under a user's feet — not just via generate_return()
