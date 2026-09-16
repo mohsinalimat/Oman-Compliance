@@ -145,6 +145,30 @@ class TestMigrateOmanVatSettings(FrappeTestCase):
 			result["needs_review"],
 		)
 
+	def test_blank_sales_account_alone_is_treated_as_missing_not_valid(self):
+		_create_legacy_setting(self.company, [""], [self.input_account])
+
+		result = _migrate_settings()
+
+		settings = frappe.get_single("Oman VAT Settings")
+		self.assertFalse(any(r.company == self.company for r in settings.vat_accounts))
+		self.assertEqual(result["accounts_migrated"], 0)
+		self.assertEqual(
+			result["needs_review"],
+			[{"company": self.company, "reason": "ambiguous_or_missing_output_vat_account"}],
+		)
+
+	def test_blank_sales_account_alongside_real_one_still_migrates(self):
+		_create_legacy_setting(self.company, [self.output_account, ""], [self.input_account])
+
+		result = _migrate_settings()
+
+		settings = frappe.get_single("Oman VAT Settings")
+		row = next(r for r in settings.vat_accounts if r.company == self.company)
+		self.assertEqual(row.output_vat_account, self.output_account)
+		self.assertEqual(result["accounts_migrated"], 1)
+		self.assertEqual(result["needs_review"], [])
+
 	def test_never_overwrites_an_already_configured_company(self):
 		set_vat_accounts(self.company, output_account=self.output_account)
 		_create_legacy_setting(self.company, [self.input_account], [])

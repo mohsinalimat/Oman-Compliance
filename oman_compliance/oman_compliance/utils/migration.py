@@ -66,20 +66,31 @@ def migrate_oman_vat_settings() -> dict:
 			result["needs_review"].append({"company": legacy.company, "reason": "company_not_oman"})
 			continue
 
-		sales_accounts = set(
-			frappe.get_all(
+		# `account` is a mandatory field on both legacy child doctypes, so a real row created
+		# through oman_vat's own UI never has a blank one — but this migration has to cope with
+		# whatever is actually in a legacy site's database, not just well-formed data (bulk
+		# imports, manual DB edits, etc.). A stray blank/None value must never count as "the one
+		# account" (which would migrate an empty string into a *required* Output VAT Account field
+		# and crash the whole settings save) or turn an otherwise-unambiguous real account into a
+		# false ambiguity.
+		sales_accounts = {
+			account
+			for account in frappe.get_all(
 				"OMAN VAT Sales Account",
 				filters={"parenttype": "OMAN VAT Setting", "parent": legacy.name},
 				pluck="account",
 			)
-		)
-		purchase_accounts = set(
-			frappe.get_all(
+			if account
+		}
+		purchase_accounts = {
+			account
+			for account in frappe.get_all(
 				"OMAN VAT Purchase Account",
 				filters={"parenttype": "OMAN VAT Setting", "parent": legacy.name},
 				pluck="account",
 			)
-		)
+			if account
+		}
 
 		if len(sales_accounts) != 1:
 			result["needs_review"].append(

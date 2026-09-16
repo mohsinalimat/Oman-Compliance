@@ -1,4 +1,5 @@
 import os
+from unittest.mock import patch
 
 from frappe.tests.utils import FrappeTestCase
 
@@ -14,9 +15,19 @@ class TestPatches(FrappeTestCase):
 		self.assertIn("oman_compliance.patches.v1.migrate_oman_vat_settings", content)
 
 	def test_execute_is_a_noop_when_legacy_app_not_installed(self):
-		# This bench doesn't have oman_vat installed (the normal case for almost every real site) —
-		# a genuine, always-available way to confirm the patch itself is a safe no-op, without
-		# needing the legacy app's doctypes. migrate_oman_vat_settings()'s own fuller behavior
-		# (unambiguous/ambiguous accounts, TRN migration, idempotency) is covered directly in
-		# utils/test_migration.py, against a real DB-backed simulation of the legacy schema.
-		execute()
+		# Mocked explicitly rather than relying on this bench's ambient installed-apps state: CI
+		# genuinely installs oman_vat (to exercise utils/test_migration.py's fuller coverage for
+		# real), so this is the only way to deterministically exercise the "not installed" no-op
+		# branch there too.
+		with (
+			patch(
+				"oman_compliance.oman_compliance.utils.migration.frappe.get_installed_apps",
+				return_value=["frappe", "erpnext", "oman_compliance"],
+			),
+			patch("oman_compliance.patches.v1.migrate_oman_vat_settings.frappe.log_error") as log_error,
+			patch("builtins.print") as mock_print,
+		):
+			execute()
+
+		mock_print.assert_not_called()
+		log_error.assert_not_called()

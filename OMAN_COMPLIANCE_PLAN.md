@@ -777,7 +777,9 @@ Only relevant for sites that currently run `oman_vat` and need to move to this a
     `is_zero_rated`/`is_exempt`, via one query-builder bulk `UPDATE` per doctype (not per-row Python) since
     this can touch every historical item row on a site.
   - `patches/v1/migrate_oman_vat_settings.py` wraps the settings/TRN migration for `patches.txt`, reporting
-    anything needing manual review via `frappe.msgprint` + `frappe.log_error`.
+    anything needing manual review via `print()` (not `frappe.msgprint()`, which targets a web request's
+    client-side message log and never reaches `bench migrate`'s terminal) plus `frappe.log_error` for a
+    persisted record.
   - **Tests**: `utils/test_migration.py` (15 tests) and `patches/test_patches.py` (2 tests), all passing.
     Getting real DB-backed coverage (this app's established preference over mocking, per Phase 3's own status
     log) without installing the actual `oman_vat` app on the shared `dev.localhost` bench turned out to need
