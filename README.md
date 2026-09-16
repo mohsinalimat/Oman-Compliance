@@ -28,7 +28,7 @@ Then configure the app for each Oman company — see "Suggested setup order for 
 
 ### Configuration checklist: generating a VAT Return
 
-A **Oman VAT Return** can only be generated correctly once, for the company in question, all of the
+An **Oman VAT Return** can only be generated correctly once, for the company in question, all of the
 following are in place. `OMAN_COMPLIANCE_CONFIGURATION.md` covers the reasoning behind each in full; this is
 the minimum checklist:
 
