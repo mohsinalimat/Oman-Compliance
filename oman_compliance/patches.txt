@@ -10,3 +10,6 @@
 execute:from oman_compliance.oman_compliance.setup import create_custom_fields; create_custom_fields() #9
 execute:from oman_compliance.oman_compliance.setup import create_designated_zones; create_designated_zones() #1
 execute:from oman_compliance.oman_compliance.setup import set_default_settings_currency; set_default_settings_currency() #1
+# Migrates settings/TRN data from the legacy oman_vat app, if installed (see OMAN_COMPLIANCE_PLAN.md
+# Phase 6). Runs after create_custom_fields() above since it writes to the oman_trn custom field.
+execute:from oman_compliance.patches.v1.migrate_oman_vat_settings import execute; execute() #1

@@ -158,6 +158,18 @@ now as a Jinja method for anyone building or customizing a print format ahead of
 Returns a string like `Exchange rate: 1 USD = 0.385 OMR (as on 23-08-2026)` for a foreign-currency Sales or
 Purchase Invoice, or nothing (`None`) for a company-currency (OMR) document.
 
+## Record retention
+
+Not a software feature — a business/process duty under Oman VAT law (findings §31), noted here so it isn't
+lost. Keep VAT-relevant records (invoices, VAT Return workings, supporting documents) for:
+
+- **10 years** generally.
+- **15 years** for records relating to real estate.
+
+Standard Frappe document history (submitted documents are immutable; see this app's own Filed-Return
+immutability checks) is a reasonable technical base for this, but retention itself — backups, archival,
+eventual deletion policy — is the taxpayer's responsibility, not something this app enforces or automates.
+
 ## Suggested setup order for a new company
 
 1. Set the Company's **TRN**.
