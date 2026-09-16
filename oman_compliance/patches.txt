@@ -7,9 +7,16 @@
 # The trailing #N on each line is a per-line version marker (bump it to force that line to
 # re-run on the next migrate when its underlying field/seed definition changes) — it is not an
 # execution-order index across lines, and the two lines below are independent of each other.
-execute:from oman_compliance.oman_compliance.setup import create_custom_fields; create_custom_fields() #9
+# Deletes stale Purchase Invoice custom fields so create_custom_fields() below recreates them
+# fresh under the new Oman VAT section/column break — CustomField.validate() only repositions a
+# brand-new field from insert_after, not an existing one being updated.
+execute:from oman_compliance.patches.v1.reorder_purchase_invoice_custom_fields import execute; execute() #1
+execute:from oman_compliance.oman_compliance.setup import create_custom_fields; create_custom_fields() #11
 execute:from oman_compliance.oman_compliance.setup import create_designated_zones; create_designated_zones() #1
 execute:from oman_compliance.oman_compliance.setup import set_default_settings_currency; set_default_settings_currency() #1
 # Migrates settings/TRN data from the legacy oman_vat app, if installed (see OMAN_COMPLIANCE_PLAN.md
 # Phase 6). Runs after create_custom_fields() above since it writes to the oman_trn custom field.
 execute:from oman_compliance.patches.v1.migrate_oman_vat_settings import execute; execute() #1
+# create_custom_fields()'s update() only sets keys present in CUSTOM_FIELDS - it can't clear a
+# column (e.g. description) removed from the source dict, so this blanks stale DB values directly.
+execute:from oman_compliance.patches.v1.clear_custom_field_descriptions import execute; execute() #1

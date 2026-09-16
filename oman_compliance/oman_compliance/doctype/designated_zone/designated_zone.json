@@ -44,7 +44,6 @@
    "label": "Article 54 Conditions"
   },
   {
-   "description": "Reference note only, not enforced by this app yet — confirm current conditions against OTA/zone-authority guidance before relying on it for VAT return classification.",
    "fieldname": "article_54_conditions",
    "fieldtype": "Text",
    "label": "Conditions"

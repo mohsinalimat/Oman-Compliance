@@ -33,7 +33,6 @@
    "fieldtype": "Column Break"
   },
   {
-   "description": "Timestamp this record was created and its TRN format validated. Not refreshed on later edits — there is no live OTA status-lookup API yet (see OMAN_COMPLIANCE_ARCHITECTURE.md §3) so Status above is not auto-refreshed either.",
    "fieldname": "last_validated_on",
    "fieldtype": "Datetime",
    "label": "Last Validated On",

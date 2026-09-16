@@ -20,8 +20,6 @@ CUSTOM_FIELDS = {
 			"fieldtype": "Data",
 			"insert_after": "tax_id",
 			"translatable": 0,
-			"description": "Oman Tax Registration Number. Kept separate from the generic Tax ID field since"
-			" other compliance apps on this site may use Tax ID for their own country's format.",
 			"module": MODULE,
 		},
 	],
@@ -61,9 +59,6 @@ CUSTOM_FIELDS = {
 			"options": "Designated Zone",
 			"insert_after": "country",
 			"translatable": 0,
-			"description": "Set if this address is inside an Oman VAT designated/free zone (Duqm,"
-			" Salalah, Sohar, Al Mazunah). Used to default line items on transactions to Zero Rated"
-			" per Article 54 — confirm actual eligibility before relying on the default.",
 			"module": MODULE,
 		},
 	],
@@ -82,8 +77,6 @@ CUSTOM_FIELDS = {
 			"insert_after": "item_tax_template",
 			"in_list_view": 1,
 			"translatable": 0,
-			"description": "Standard-rated, zero-rated, exempt, or out-of-scope for Oman VAT purposes"
-			" (findings §51/85). Left blank, this is defaulted automatically on save.",
 			"module": MODULE,
 		},
 	],
@@ -95,9 +88,6 @@ CUSTOM_FIELDS = {
 			"options": VAT_CATEGORY_SELECT_OPTIONS,
 			"insert_after": "disabled",
 			"translatable": 0,
-			"description": "Set this so transactions using this template can default and validate their"
-			" own VAT Category from it, rather than relying on a designated-zone guess or a bare tax rate"
-			" that can't tell Zero Rated apart from Exempt or Out of Scope (all commonly 0%).",
 			"module": MODULE,
 		},
 		{
@@ -105,21 +95,23 @@ CUSTOM_FIELDS = {
 			"label": "Fetch VAT Accounts",
 			"fieldtype": "Button",
 			"insert_after": "section_break_5",
-			"description": "Adds a row below for each of this Company's configured Output/Input VAT"
-			" Accounts (Oman VAT Settings) not already present here.",
 			"module": MODULE,
 		},
 	],
 	"Purchase Invoice": [
 		{
+			"fieldname": "oman_vat_section",
+			"label": "Oman VAT",
+			"fieldtype": "Section Break",
+			"insert_after": "tax_category",
+			"module": MODULE,
+		},
+		{
 			"fieldname": "is_reverse_charge",
 			"label": "Reverse Charge Applicable",
 			"fieldtype": "Check",
-			"insert_after": "tax_category",
+			"insert_after": "oman_vat_section",
 			"translatable": 0,
-			"description": "Check for imported services and other reverse-charge supplies where this"
-			" company must self-account for output VAT as the recipient (Oman VAT return box 2,"
-			" findings §56/86). Requires VAT rows on this invoice for the self-accounting entries.",
 			"module": MODULE,
 		},
 		{
@@ -129,22 +121,21 @@ CUSTOM_FIELDS = {
 			"insert_after": "is_reverse_charge",
 			"read_only": 1,
 			"translatable": 0,
-			"description": "Automatically set when the Supplier Address's country is a GCC member"
-			" state other than Oman. Only relevant when Reverse Charge Applicable is checked — splits"
-			" Oman VAT return box 2 into 2(a) intra-GCC (not yet activated by the OTA) vs 2(b)"
-			" non-GCC reverse-charge purchases.",
+			"module": MODULE,
+		},
+		{
+			"fieldname": "column_break_oman_pinv",
+			"fieldtype": "Column Break",
+			"insert_after": "is_gcc_supplier",
 			"module": MODULE,
 		},
 		{
 			"fieldname": "is_import_of_goods",
 			"label": "Import of Goods",
 			"fieldtype": "Check",
-			"insert_after": "is_gcc_supplier",
+			"insert_after": "column_break_oman_pinv",
 			"read_only": 1,
 			"translatable": 0,
-			"description": "Automatically set from the Dispatch Address's country (Oman VAT return"
-			" box 4 — distinct from Reverse Charge above, which covers imported services, not goods)."
-			" A blank Dispatch Address is treated as not an import.",
 			"module": MODULE,
 		},
 		{
@@ -153,11 +144,6 @@ CUSTOM_FIELDS = {
 			"fieldtype": "Check",
 			"insert_after": "is_import_of_goods",
 			"translatable": 0,
-			"description": "Manual: check if customs deferred/postponed-payment VAT was elected for"
-			" this import (Oman VAT return box 4(a), a subset of box 4(b) Total Goods Imported)."
-			" Not derivable from ERPNext data — this is a customs election made at the border, so"
-			" unlike Import of Goods above it must be set by the preparer, and is only meaningful"
-			" when Import of Goods is checked.",
 			"module": MODULE,
 		},
 	],
@@ -169,10 +155,6 @@ CUSTOM_FIELDS = {
 			"insert_after": "customer_address",
 			"read_only": 1,
 			"translatable": 0,
-			"description": "Automatically set when the Shipping Address's country (falling back to"
-			" the Customer Address if no Shipping Address is set) differs from this Company's"
-			" country (Oman VAT return box 3(a) — distinct from a domestic Zero Rated sale, box"
-			" 1(b)). Only meaningful when VAT Category is Zero Rated.",
 			"module": MODULE,
 		},
 		{
@@ -182,12 +164,6 @@ CUSTOM_FIELDS = {
 			"insert_after": "is_export",
 			"read_only": 1,
 			"translatable": 0,
-			"description": "Automatically set when the Net Total is below Oman VAT Settings'"
-			" Simplified Tax Invoice Threshold (OMR 500 by default) and the Customer has no TRN"
-			" (i.e. a non-taxable/B2C consumer) — drives which layout the Oman Tax Invoice print"
-			" format auto-selects. A suggested default only: OTA permits, but doesn't require, a"
-			" Simplified Tax Invoice for such a supply, so a user can still manually pick either"
-			" print format regardless of this flag's value.",
 			"module": MODULE,
 		},
 	],

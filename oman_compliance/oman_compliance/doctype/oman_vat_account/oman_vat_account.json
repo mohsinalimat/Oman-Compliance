@@ -19,7 +19,6 @@
    "reqd": 1
   },
   {
-   "description": "The account this company posts output VAT to — both ordinary sales VAT and, on a Purchase Invoice, the self-accounted output VAT liability for Reverse Charge purchases.",
    "fieldname": "output_vat_account",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -28,7 +27,6 @@
    "reqd": 1
   },
   {
-   "description": "The account this company posts recoverable input VAT to — on a Purchase Invoice, the offsetting input VAT credit for a self-accounted Reverse Charge purchase. Only required if this company uses Reverse Charge Applicable; not used for ordinary Sales Invoice validation.",
    "fieldname": "input_vat_account",
    "fieldtype": "Link",
    "in_list_view": 1,

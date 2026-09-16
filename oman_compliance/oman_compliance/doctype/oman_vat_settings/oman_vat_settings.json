@@ -20,7 +20,6 @@
    "label": "VAT Accounts"
   },
   {
-   "description": "One row per company, naming the account that company posts output VAT to — both ordinary sales VAT and, on a Purchase Invoice, the self-accounted output VAT liability for Reverse Charge purchases. Explicitly configured rather than guessed from account type, matching how India Compliance's own GST Settings names its GST accounts explicitly (per company) via its `gst_accounts` child table, rather than inferring them.",
    "fieldname": "vat_accounts",
    "fieldtype": "Table",
    "label": "VAT Accounts",
@@ -33,7 +32,6 @@
   },
   {
    "default": "500",
-   "description": "Grand total (excl. VAT) below which a Simplified Tax Invoice may be issued to a non-taxable customer instead of a full Tax Invoice.",
    "fieldname": "simplified_tax_invoice_threshold",
    "fieldtype": "Currency",
    "label": "Simplified Tax Invoice Threshold",
@@ -45,7 +43,6 @@
   },
   {
    "default": "38500",
-   "description": "Informational only. Annual taxable supplies above this amount require mandatory VAT registration with the OTA.",
    "fieldname": "mandatory_registration_threshold",
    "fieldtype": "Currency",
    "label": "Mandatory VAT Registration Threshold",
@@ -53,7 +50,6 @@
   },
   {
    "default": "19250",
-   "description": "Informational only. Annual taxable supplies above this amount allow voluntary VAT registration with the OTA.",
    "fieldname": "voluntary_registration_threshold",
    "fieldtype": "Currency",
    "label": "Voluntary VAT Registration Threshold",
@@ -61,7 +57,6 @@
   },
   {
    "default": "OMR",
-   "description": "These thresholds are always in OMR regardless of the site's default currency.",
    "fieldname": "settings_currency",
    "fieldtype": "Link",
    "hidden": 1,

@@ -83,7 +83,6 @@
    "label": "Totals"
   },
   {
-   "description": "Box 5 — total VAT due, net of credit/debit note adjustments.",
    "fieldname": "total_vat_due",
    "fieldtype": "Currency",
    "label": "Total VAT Due",
@@ -95,7 +94,6 @@
    "fieldtype": "Column Break"
   },
   {
-   "description": "Box 6 — recoverable input VAT credit, net of purchase credit/debit note adjustments.",
    "fieldname": "input_vat_credit_total",
    "fieldtype": "Currency",
    "label": "Input VAT Credit",
@@ -103,7 +101,6 @@
    "read_only": 1
   },
   {
-   "description": "Box 7 = Box 5 - Box 6.",
    "fieldname": "net_tax_liability",
    "fieldtype": "Currency",
    "label": "Net Tax Liability",

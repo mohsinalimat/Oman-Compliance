@@ -15,7 +15,6 @@
  ],
  "fields": [
   {
-   "description": "OTA's own box numbering (e.g. \"1(a)\", \"4(b)\") — Data, not Select: the row set this app generates is fixed in code, not hand-picked per row, so a Select option list would only need updating in lockstep with the generator anyway.",
    "fieldname": "box_code",
    "fieldtype": "Data",
    "in_list_view": 1,
@@ -50,7 +49,6 @@
    "read_only": 1
   },
   {
-   "description": "Credit/debit note (is_return) figure for this box, kept separate from the main columns rather than netted in, for audit traceability.",
    "fieldname": "adjustment_taxable_amount",
    "fieldtype": "Currency",
    "in_list_view": 1,
