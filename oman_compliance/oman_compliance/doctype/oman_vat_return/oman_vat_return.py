@@ -35,6 +35,7 @@ class OmanVATReturn(Document):
 			self.period_type = self._determine_period_type()
 
 		self.validate_filed_is_immutable()
+		self._clear_boxes_if_stale()
 
 	def _determine_period_type(self) -> str:
 		"""Oman VAT returns are always filed for a whole calendar period — never a partial month
@@ -72,6 +73,52 @@ class OmanVATReturn(Document):
 
 		if self._get_locked_persisted_status() == "Filed":
 			frappe.throw(_("A Filed return cannot be modified."), title=_("Return Already Filed"))
+
+	def _boxes_are_stale(self) -> bool:
+		"""`boxes` is a point-in-time snapshot computed by generate_return() from company/from_date/
+		to_date — those three fields stay editable afterwards, so both a plain save() and
+		mark_as_filed() need to detect a now-mismatched snapshot rather than trusting `boxes` being
+		non-empty on its own. This deliberately doesn't use Document.has_value_changed(), even
+		though that's the idiomatic Frappe way to compare against the last-persisted value: it
+		would compare against the header *before this save*, not against what `boxes` was actually
+		generated for — so changing From Date and clicking Generate Return again in the same save
+		would see "from_date changed" and immediately wipe the very boxes generate_return() just
+		computed for the new date. Stamping generated_for_* only inside generate_return() itself
+		avoids that false positive."""
+		if not self.boxes:
+			return False
+
+		if not (self.generated_for_company and self.generated_for_from_date and self.generated_for_to_date):
+			return True
+
+		return not (
+			self.company == self.generated_for_company
+			and getdate(self.from_date) == getdate(self.generated_for_from_date)
+			and getdate(self.to_date) == getdate(self.generated_for_to_date)
+		)
+
+	def _clear_boxes_if_stale(self):
+		"""Reset to an ungenerated state once boxes no longer match the header: mark_as_filed()
+		already refuses to file empty boxes, and the "Mark as Filed" button is gated on boxes being
+		non-empty, so this alone forces a regenerate before the return can be filed again."""
+		if not self._boxes_are_stale():
+			return
+
+		self.boxes = []
+		self.total_vat_due = 0
+		self.input_vat_credit_total = 0
+		self.net_tax_liability = 0
+		self.generated_for_company = None
+		self.generated_for_from_date = None
+		self.generated_for_to_date = None
+
+		frappe.msgprint(
+			_(
+				"Company/From Date/To Date changed since the return was generated — boxes were cleared. Regenerate the return."
+			),
+			indicator="orange",
+			alert=True,
+		)
 
 	def on_trash(self):
 		# Reads the persisted status fresh rather than trusting self.status: a doc instance loaded
@@ -130,6 +177,10 @@ class OmanVATReturn(Document):
 		self.input_vat_credit_total = get_input_vat_credit_total(input_vat_credit)
 		self.net_tax_liability = get_net_tax_liability(self.total_vat_due, self.input_vat_credit_total)
 
+		self.generated_for_company = self.company
+		self.generated_for_from_date = self.from_date
+		self.generated_for_to_date = self.to_date
+
 		self.save()
 
 	@frappe.whitelist()
@@ -137,12 +188,24 @@ class OmanVATReturn(Document):
 		"""The only supported Draft -> Filed transition (see validate_filed_is_immutable() above,
 		which locks the document the moment this save lands). Requires boxes to already be
 		generated — filing a return that was never run through generate_return() would lock in an
-		all-zero return rather than the period's actual figures."""
+		all-zero return rather than the period's actual figures. The staleness check must happen
+		here, before `status` is flipped, rather than being left to save()'s own
+		_clear_boxes_if_stale(): that runs inside the same validate() call as
+		validate_filed_is_immutable(), so relying on it alone would let a stale save wipe `boxes`
+		to empty while `status` is already set to "Filed" in memory, persisting an all-zero Filed
+		return instead of refusing the transition outright."""
 		if self.status == "Filed":
 			frappe.throw(_("This return has already been filed."))
 
 		if not self.boxes:
 			frappe.throw(_("Generate the return before filing it."))
+
+		if self._boxes_are_stale():
+			frappe.throw(
+				_(
+					"The generated boxes no longer match this return's Company/From Date/To Date. Regenerate the return before filing it."
+				)
+			)
 
 		self.status = "Filed"
 		self.save()

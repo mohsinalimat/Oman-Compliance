@@ -13,6 +13,9 @@
   "status",
   "section_break_boxes",
   "boxes",
+  "generated_for_company",
+  "generated_for_from_date",
+  "generated_for_to_date",
   "section_break_totals",
   "total_vat_due",
   "column_break_ovr3",
@@ -75,6 +78,28 @@
    "fieldtype": "Table",
    "label": "Boxes",
    "options": "Oman VAT Return Detail",
+   "read_only": 1
+  },
+  {
+   "fieldname": "generated_for_company",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Generated For Company",
+   "options": "Company",
+   "read_only": 1
+  },
+  {
+   "fieldname": "generated_for_from_date",
+   "fieldtype": "Date",
+   "hidden": 1,
+   "label": "Generated For From Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "generated_for_to_date",
+   "fieldtype": "Date",
+   "hidden": 1,
+   "label": "Generated For To Date",
    "read_only": 1
   },
   {

@@ -160,6 +160,78 @@ class TestOmanVATReturn(FrappeTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			self.doc.mark_as_filed()
 
+	def test_editing_period_after_generating_clears_stale_boxes(self):
+		self._generate_with()
+
+		next_month = frappe.utils.add_months(self.doc.from_date, 1)
+		self.doc.from_date = get_first_day(next_month)
+		self.doc.to_date = get_last_day(next_month)
+		self.doc.save()
+
+		self.assertEqual(self.doc.boxes, [])
+		self.assertEqual(self.doc.total_vat_due, 0)
+		self.assertEqual(self.doc.input_vat_credit_total, 0)
+		self.assertEqual(self.doc.net_tax_liability, 0)
+
+	def test_editing_period_after_generating_blocks_filing_until_regenerated(self):
+		self._generate_with()
+
+		next_month = frappe.utils.add_months(self.doc.from_date, 1)
+		self.doc.from_date = get_first_day(next_month)
+		self.doc.to_date = get_last_day(next_month)
+		self.doc.save()
+
+		with self.assertRaises(frappe.ValidationError):
+			self.doc.mark_as_filed()
+
+	def test_changing_period_then_regenerating_keeps_the_new_boxes(self):
+		# Changing From/To Date and clicking Generate Return again in one flow must not have its
+		# own freshly-generated boxes wiped by the staleness check — generate_return() stamps
+		# generated_for_* to match the new period as part of the same save.
+		self._generate_with()
+
+		next_month = frappe.utils.add_months(self.doc.from_date, 1)
+		self.doc.from_date = get_first_day(next_month)
+		self.doc.to_date = get_last_day(next_month)
+		self._generate_with(
+			domestic_supplies={
+				"standard_rated": _box(taxable_amount=500, vat_amount=25),
+				"zero_rated": _box(),
+				"exempt": _box(),
+			}
+		)
+
+		self.assertTrue(self.doc.boxes)
+		by_code = {row.box_code: row for row in self.doc.boxes}
+		self.assertEqual(by_code["1(a)"].taxable_amount, 500)
+		self.doc.mark_as_filed()  # should not raise
+
+	def test_filing_with_an_unsaved_stale_period_edit_is_rejected(self):
+		# Mirrors editing From/To Date in the desk form and clicking "Mark as Filed" without an
+		# intervening save: `boxes` in memory is still the old snapshot, non-empty, so a check that
+		# only looked at `bool(self.boxes)` would pass here and only get caught once self.save()'s
+		# own validate() clears boxes — by which point status would already be "Filed" in memory.
+		self._generate_with()
+
+		next_month = frappe.utils.add_months(self.doc.from_date, 1)
+		self.doc.from_date = get_first_day(next_month)
+		self.doc.to_date = get_last_day(next_month)
+
+		with self.assertRaises(frappe.ValidationError):
+			self.doc.mark_as_filed()
+
+		self.assertNotEqual(self.doc.status, "Filed")
+		self.assertTrue(self.doc.boxes)
+
+	def test_saving_without_changing_company_or_dates_keeps_generated_boxes(self):
+		self._generate_with()
+		box_count = len(self.doc.boxes)
+
+		self.doc.save()
+
+		self.assertEqual(len(self.doc.boxes), box_count)
+		self.doc.mark_as_filed()  # should not raise
+
 	def test_from_date_after_to_date_is_rejected(self):
 		self.doc.from_date = get_unique_test_date()
 		self.doc.to_date = frappe.utils.add_days(self.doc.from_date, -1)
